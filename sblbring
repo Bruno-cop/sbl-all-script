@@ -2,53 +2,21 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
 
-player.CharacterAdded:Connect(function(char)
-	character = char
-end)
+local player = Players.LocalPlayer
 
 --// CONFIG
-local DISTANCIA = 6
-local WALK_SPEED = 50 -- velocidade do botão de velocidade
-local JUMP_POWER = 150 -- pulo do botão de pulo infinito
-
-local BringAtivo = {
-	Mobs1 = false,
-	Mobs2 = false,
-	Mobs3 = false,
-	Mobs4 = false,
-	Mobs5 = false
-}
-
-local ExtraAtivo = {
-	Speed = false,
-	InfiniteJump = false,
-	TeleportR = false
-}
-
---// FUNÇÃO BRING
-local function bringMob(model, hrp)
-	if model and model:IsA("Model") then
-		local hum = model:FindFirstChild("Humanoid")
-		local mobHrp = model:FindFirstChild("HumanoidRootPart")
-
-		if hum and mobHrp and hum.Health > 0 then
-			mobHrp.CFrame = hrp.CFrame * CFrame.new(0, 0, -DISTANCIA)
-			mobHrp.AssemblyLinearVelocity = Vector3.zero
-			mobHrp.AssemblyAngularVelocity = Vector3.zero
-			mobHrp.CanCollide = false
-		end
-	end
-end
+local ESPAtivo = false
+local DISTANCIA_MAX = 300
 
 --// GUI
-local gui = Instance.new("ScreenGui", game.CoreGui)
-gui.Name = "BringMobMenu"
+local gui = Instance.new("ScreenGui")
+gui.Name = "MobESPMenu"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 220, 0, 360)
+frame.Size = UDim2.new(0, 220, 0, 130)
 frame.Position = UDim2.new(0, 20, 0.35, 0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.BorderSizePixel = 0
@@ -56,129 +24,104 @@ Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1, 0, 0, 35)
-title.Text = "BRING MOBS"
+title.Text = "MOB ESP"
 title.TextColor3 = Color3.new(1,1,1)
 title.BackgroundTransparency = 1
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 18
 
---// FUNÇÃO PARA ARRASTAR O FRAME
-local dragging = false
-local dragInput, mousePos, framePos
+--// BOTÃO
+local botaoESP = Instance.new("TextButton", frame)
+botaoESP.Size = UDim2.new(1, -20, 0, 40)
+botaoESP.Position = UDim2.new(0, 10, 0, 60)
+botaoESP.Text = "ESP: OFF"
+botaoESP.BackgroundColor3 = Color3.fromRGB(50,50,50)
+botaoESP.TextColor3 = Color3.new(1,1,1)
+botaoESP.BorderSizePixel = 0
+botaoESP.Font = Enum.Font.SourceSansBold
+botaoESP.TextSize = 16
+Instance.new("UICorner", botaoESP).CornerRadius = UDim.new(0, 6)
 
-local function update(input)
-	local delta = input.Position - mousePos
-	frame.Position = UDim2.new(
-		framePos.X.Scale,
-		framePos.X.Offset + delta.X,
-		framePos.Y.Scale,
-		framePos.Y.Offset + delta.Y
-	)
+botaoESP.MouseButton1Click:Connect(function()
+	ESPAtivo = not ESPAtivo
+	botaoESP.Text = "ESP: " .. (ESPAtivo and "ON" or "OFF")
+end)
+
+--// FUNÇÕES ESP
+local function aplicarESP(model)
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	local head = model:FindFirstChild("Head")
+	if not hum or not head then return end
+
+	-- Highlight
+	if not model:FindFirstChild("MobESP") then
+		local highlight = Instance.new("Highlight")
+		highlight.Name = "MobESP"
+		highlight.FillColor = Color3.fromRGB(255, 0, 0)
+		highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+		highlight.FillTransparency = 0.5
+		highlight.Parent = model
+	end
+
+	-- Nome acima da cabeça
+	if not head:FindFirstChild("NameESP") then
+		local billboard = Instance.new("BillboardGui")
+		billboard.Name = "NameESP"
+		billboard.Size = UDim2.new(0, 200, 0, 40)
+		billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+		billboard.AlwaysOnTop = true
+		billboard.Parent = head
+
+		local text = Instance.new("TextLabel")
+		text.Size = UDim2.new(1, 0, 1, 0)
+		text.BackgroundTransparency = 1
+		text.Text = model.Name
+		text.TextColor3 = Color3.new(1,1,1)
+		text.TextStrokeTransparency = 0
+		text.Font = Enum.Font.SourceSansBold
+		text.TextScaled = true
+		text.Parent = billboard
+	end
 end
 
-title.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = true
-		mousePos = input.Position
-		framePos = frame.Position
-
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
+local function removerESP(model)
+	local highlight = model:FindFirstChild("MobESP")
+	if highlight then
+		highlight:Destroy()
 	end
-end)
 
-title.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement then
-		dragInput = input
+	local head = model:FindFirstChild("Head")
+	if head then
+		local nameGui = head:FindFirstChild("NameESP")
+		if nameGui then
+			nameGui:Destroy()
+		end
 	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		update(input)
-	end
-end)
-
---// FUNÇÃO BOTÃO
-local function criarBotao(nome, posY, tabela)
-	local btn = Instance.new("TextButton", frame)
-	btn.Size = UDim2.new(1, -20, 0, 35)
-	btn.Position = UDim2.new(0, 10, 0, posY)
-	btn.Text = nome .. ": OFF"
-	btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
-	btn.TextColor3 = Color3.new(1,1,1)
-	btn.BorderSizePixel = 0
-	btn.Font = Enum.Font.SourceSansBold
-	btn.TextSize = 14
-
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-
-	btn.MouseButton1Click:Connect(function()
-		tabela[nome] = not tabela[nome]
-		btn.Text = nome .. ": " .. (tabela[nome] and "ON" or "OFF")
-	end)
 end
 
---// BOTÕES BRING
-criarBotao("Mobs1", 45, BringAtivo)
-criarBotao("Mobs2", 90, BringAtivo)
-criarBotao("Mobs3", 135, BringAtivo)
-criarBotao("Mobs4", 180, BringAtivo)
-criarBotao("Mobs5", 225, BringAtivo)
-
---// BOTÕES EXTRAS
-criarBotao("Speed", 270, ExtraAtivo)
-criarBotao("InfiniteJump", 305, ExtraAtivo)
-criarBotao("TeleportR", 340, ExtraAtivo)
-
---// LOOP PRINCIPAL
+--// LOOP
 RunService.RenderStepped:Connect(function()
+	local mobsFolder = workspace:FindFirstChild("WalkingNPC")
+	if not mobsFolder then return end
+	
+	local character = player.Character
 	if not character then return end
+	
 	local hrp = character:FindFirstChild("HumanoidRootPart")
-	local hum = character:FindFirstChildOfClass("Humanoid")
-	if not hrp or not hum then return end
+	if not hrp then return end
 
-	-- Bring Mobs
-	local walkingNPC = workspace:FindFirstChild("WalkingNPC")
-	if walkingNPC then
-		for _, mob in pairs(walkingNPC:GetChildren()) do
-			if BringAtivo[mob.Name] then
-				bringMob(mob, hrp)
+	for _, mob in pairs(mobsFolder:GetChildren()) do
+		local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+		if mobHrp then
+			local distancia = (mobHrp.Position - hrp.Position).Magnitude
+
+			if ESPAtivo and distancia <= DISTANCIA_MAX then
+				aplicarESP(mob)
+			else
+				removerESP(mob)
 			end
 		end
 	end
-
-	-- Velocidade
-	if ExtraAtivo.Speed then
-		hum.WalkSpeed = WALK_SPEED
-	else
-		hum.WalkSpeed = 16 -- valor padrão do Roblox
-	end
 end)
 
---// Pulo infinito
-UserInputService.JumpRequest:Connect(function()
-	if ExtraAtivo.InfiniteJump then
-		local hum = character:FindFirstChildOfClass("Humanoid")
-		if hum then
-			hum:ChangeState(Enum.HumanoidStateType.Jumping)
-		end
-	end
-end)
-
---// Teleporte no R
-UserInputService.InputBegan:Connect(function(input, processed)
-	if processed then return end
-	if ExtraAtivo.TeleportR and input.KeyCode == Enum.KeyCode.R then
-		local mouse = player:GetMouse()
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if hrp then
-			hrp.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0,3,0))
-		end
-	end
-end)
-
-print("Menu Bring Mob carregado e arrastável com Speed, InfiniteJump e TeleporteR")
+print("ESP com Nome carregado!")
